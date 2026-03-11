@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>迷宫探险 - Roguelike Game</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #1a1a2e;
+            --ground-color: #16213e;
+            --wall-color: #0f3460;
+            --player-color: #e94560;
+            --enemy-color: #ff6b35;
+            --gold-color: #ffd700;
+            --health-color: #ff4757;
+            --text-color: #eee;
+            --log-bg: #0d0d1a;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Press Start 2P', monospace;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            text-shadow: 3px 3px 0 #e94560;
+            letter-spacing: 2px;
+        }
+
+        #status-bar {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 15px;
+            font-size: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .stat {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 15px;
+            background: var(--log-bg);
+            border-radius: 8px;
+            border: 2px solid var(--wall-color);
+        }
+
+        .stat-icon {
+            font-size: 16px;
+        }
+
+        .stat-value {
+            color: var(--gold-color);
+        }
+
+        .health-bar {
+            width: 100px;
+            height: 16px;
+            background: #333;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .health-fill {
+            height: 100%;
+            background: var(--health-color);
+            transition: width 0.3s ease;
+        }
+
+        #game-container {
+            position: relative;
+            border: 4px solid var(--wall-color);
+            border-radius: 8px;
+            box-shadow: 0 0 30px rgba(233, 69, 96, 0.3);
+        }
+
+        #game-canvas {
+            display: block;
+            background: var(--ground-color);
+        }
+
+        #log-area {
+            width: 800px;
+            height: 120px;
+            background: var(--log-bg);
+            border: 2px solid var(--wall-color);
+            border-radius: 8px;
+            margin-top: 15px;
+            padding: 10px;
+            overflow-y: auto;
+            font-size: 10px;
+            line-height: 1.8;
+        }
+
+        .log-entry {
+            margin-bottom: 4px;
+            opacity: 0.9;
+        }
+
+        .log-entry.damage { color: #ff6b6b; }
+        .log-entry.heal { color: #51cf66; }
+        .log-entry.gold { color: var(--gold-color); }
+        .log-entry.levelup { color: #cc5de8; }
+        .log-entry.info { color: #74c0fc; }
+
+        #controls {
+            margin-top: 15px;
+            font-size: 10px;
+            color: #888;
+            text-align: center;
+        }
+
+        #game-over {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+        }
+
+        #game-over h2 {
+            color: var(--health-color);
+            font-size: 28px;
+        }
+
+        #restart-btn {
+            font-family: 'Press Start 2P', monospace;
+            font-size: 14px;
+            padding: 15px 30px;
+            background: var(--player-color);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        #restart-btn:hover {
+            transform: scale(1.1);
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .shake {
+            animation: shake 0.2s ease;
+        }
+    </style>
+</head>
+<body>
+    <h1>🗡️ 迷宫探险 🛡️</h1>
+    
+    <div id="status-bar">
+        <div class="stat">
+            <span class="stat-icon">❤️</span>
+            <div class="health-bar">
+                <div class="health-fill" id="health-fill" style="width: 100%"></div>
+            </div>
+            <span id="health-text">100/100</span>
+        </div>
+        <div class="stat">
+            <span class="stat-icon">⚔️</span>
+            <span>攻击:</span>
+            <span class="stat-value" id="attack">10</span>
+        </div>
+        <div class="stat">
+            <span class="stat-icon">🛡️</span>
+            <span>防御:</span>
+            <span class="stat-value" id="defense">0</span>
+        </div>
+        <div class="stat">
+            <span class="stat-icon">🪙</span>
+            <span>金币:</span>
+            <span class="stat-value" id="gold">0</span>
+        </div>
+        <div class="stat">
+            <span class="stat-icon">⭐</span>
+            <span>经验:</span>
+            <span class="stat-value" id="exp">0</span>
+        </div>
+        <div class="stat">
+            <span class="stat-icon">🏰</span>
+            <span>层数:</span>
+            <span class="stat-value" id="floor">1</span>
+        </div>
+    </div>
+
+    <div id="game-container">
+        <canvas id="game-canvas" width="800" height="600"></canvas>
+        <div id="game-over">
+            <h2>💀 游戏结束 💀</h2>
+            <p id="final-score">你到达了第 1 层</p>
+            <button id="restart-btn">🔄 再来一次</button>
+        </div>
+    </div>
+
+    <div id="log-area"></div>
+
+    <div id="controls">
+        使用 <b>方向键</b> 或 <b>WASD</b> 移动 | 击败敌人获得经验与金币 | 找到楼梯下楼
+    </div>
+
+    <script>
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        const TILE_SIZE = 32;
+        const COLS = Math.floor(canvas.width / TILE_SIZE);
+        const ROWS = Math.floor(canvas.height / TILE_SIZE);
+
+        // 游戏状态
+        let game = {
+            player: {
+                x: 1,
+                y: 1,
+                hp: 100,
+                maxHp: 100,
+                attack: 10,
+                defense: 0,
+                gold: 0,
+                exp: 0,
+                level: 1
+            },
+            floor: 1,
+            map: [],
+            enemies: [],
+            items: [],
+            stairs: { x: 0, y: 0 },
+            log: []
+        };
+
+        const ENEMY_TYPES = [
+            { emoji: '🐀', name: '老鼠', hp: 10, attack: 3, defense: 0, exp: 5, gold: 5 },
+            { emoji: '🦇', name: '蝙蝠', hp: 8, attack: 5, defense: 0, exp: 8, gold: 8 },
+            { emoji: '🧟', name: '僵尸', hp: 20, attack: 8, defense: 2, exp: 15, gold: 15 },
+            { emoji: '👹', name: '恶魔', hp: 30, attack: 12, defense: 5, exp: 25, gold: 25 }
+        ];
+
+        const BOSS = { emoji: '🐉', name: '龙', hp: 100, attack: 20, defense: 10, exp: 100, gold: 100 };
+
+        const ITEM_TYPES = [
+            { emoji: '🗡️', name: '铁剑', type: 'weapon', value: 3 },
+            { emoji: '⚔️', name: '钢刀', type: 'weapon', value: 5 },
+            { emoji: '🛡️', name: '木盾', type: 'armor', value: 2 },
+            { emoji: '🛡️', name: '铁甲', type: 'armor', value: 5 },
+            { emoji: '🧪', name: '药水', type: 'potion', value: 30 },
+            { emoji: '💎', name: '宝石', type: 'gold', value: 50 }
+        ];
+
+        // 随机生成迷宫
+        function generateMap() {
+            // 初始化为墙壁
+            game.map = [];
+            for (let y = 0; y < ROWS; y++) {
+                game.map[y] = [];
+                for (let x = 0; x < COLS; x++) {
+                    game.map[y][x] = 1; // 1 = 墙壁
+                }
+            }
+
+            // 使用随机游走生成房间
+            let x = Math.floor(COLS / 2);
+            let y = Math.floor(ROWS / 2);
+            game.map[y][x] = 0;
+            
+            let floorSize = Math.floor(COLS * ROWS * 0.4);
+            let visited = new Set([`${x},${y}`]);
+            let stack = [[x, y]];
+
+            while (stack.length > 0 && visited.size < floorSize) {
+                const [cx, cy] = stack[stack.length - 1];
+                const directions = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+                directions.sort(() => Math.random() - 0.5);
+
+                let found = false;
+                for (const [dx, dy] of directions) {
+                    const nx = cx + dx;
+                    const ny = cy + dy;
+                    if (nx > 1 && nx < COLS - 2 && ny > 1 && ny < ROWS - 2 && !visited.has(`${nx},${ny}`)) {
+                        if (Math.random() > 0.3) {
+                            game.map[ny][nx] = 0;
+                            visited.add(`${nx},${ny}`);
+                            stack.push([nx, ny]);
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                if (!found) stack.pop();
+            }
+
+            // 确保玩家位置是空的
+            game.map[game.player.y][game.player.x] = 0;
+
+            // 放置楼梯
+            placeStairs();
+
+            // 生成敌人
+            generateEnemies();
+
+            // 生成物品
+            generateItems();
+        }
+
+        function placeStairs() {
+            let attempts = 0;
+            while (attempts < 100) {
+                let x = Math.floor(Math.random() * (COLS - 4)) + 2;
+                let y = Math.floor(Math.random() * (ROWS - 4)) + 2;
+                if (game.map[y][x] === 0 && (x !== game.player.x || y !== game.player.y)) {
+                    game.stairs = { x, y };
+                    break;
+                }
+                attempts++;
+            }
+        }
+
+        function generateEnemies() {
+            game.enemies = [];
+            const isBossFloor = game.floor % 5 === 0;
+            const enemyCount = Math.floor(Math.random() * 4) + 3 + Math.floor(game.floor / 2);
+
+            for (let i = 0; i < (isBossFloor ? 1 : enemyCount); i++) {
+                let attempts = 0;
+                while (attempts < 50) {
+                    let x = Math.floor(Math.random() * (COLS - 4)) + 2;
+                    let y = Math.floor(Math.random() * (ROWS - 4)) + 2;
+                    if (game.map[y][x] === 0 && (x !== game.player.x || y !== game.player.y) &&
+                        (game.stairs.x !== x || game.stairs.y !== y)) {
+                        
+                        let enemyType;
+                        if (isBossFloor && i === 0) {
+                            enemyType = { ...BOSS };
+                        } else {
+                            const idx = Math.min(Math.floor(Math.random() * ENEMY_TYPES.length), 
+                                Math.floor((game.floor - 1) / 2));
+                            enemyType = { ...ENEMY_TYPES[Math.min(idx, ENEMY_TYPES.length - 1)] };
+                        }
+                        
+                        game.enemies.push({
+                            x, y,
+                            ...enemyType,
+                            maxHp: enemyType.hp
+                        });
+                        break;
+                    }
+                    attempts++;
+                }
+            }
+        }
+
+        function generateItems() {
+            game.items = [];
+            const itemCount = Math.floor(Math.random() * 4) + 2;
+
+            for (let i = 0; i < itemCount; i++) {
+                let attempts = 0;
+                while (attempts < 50) {
+                    let x = Math.floor(Math.random() * (COLS - 4)) + 2;
+                    let y = Math.floor(Math.random() * (ROWS - 4)) + 2;
+                    if (game.map[y][x] === 0 && (x !== game.player.x || y !== game.player.y) &&
+                        (game.stairs.x !== x || game.stairs.y !== y) &&
+                        !game.enemies.find(e => e.x === x && e.y === y)) {
+                        
+                        const itemType = ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)];
+                        game.items.push({ x, y, ...itemType });
+                        break;
+                    }
+                    attempts++;
+                }
+            }
+        }
+
+        // 渲染
+        function render() {
+            ctx.fillStyle = '#16213e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制地图
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                    if (game.map[y][x] === 1) {
+                        ctx.fillStyle = '#0f3460';
+                        ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                        ctx.strokeStyle = '#1a4a7a';
+                        ctx.strokeRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                    } else {
+                        ctx.fillStyle = '#16213e';
+                        ctx.fillRect(x * TILE_SIZE + 2, y * TILE_SIZE + 2, TILE_SIZE - 4, TILE_SIZE - 4);
+                    }
+                }
+            }
+
+            // 绘制楼梯
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🚪', game.stairs.x * TILE_SIZE + TILE_SIZE/2, game.stairs.y * TILE_SIZE + TILE_SIZE/2);
+
+            // 绘制物品
+            for (const item of game.items) {
+                ctx.fillText(item.emoji, item.x * TILE_SIZE + TILE_SIZE/2, item.y * TILE_SIZE + TILE_SIZE/2);
+            }
+
+            // 绘制敌人
+            for (const enemy of game.enemies) {
+                ctx.fillText(enemy.emoji, enemy.x * TILE_SIZE + TILE_SIZE/2, enemy.y * TILE_SIZE + TILE_SIZE/2);
+            }
+
+            // 绘制玩家
+            ctx.fillStyle = '#e94560';
+            ctx.beginPath();
+            ctx.arc(game.player.x * TILE_SIZE + TILE_SIZE/2, game.player.y * TILE_SIZE + TILE_SIZE/2, TILE_SIZE/2 - 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+        }
+
+        // 更新UI
+        function updateUI() {
+            const healthPercent = (game.player.hp / game.player.maxHp) * 100;
+            document.getElementById('health-fill').style.width = healthPercent + '%';
+            document.getElementById('health-text').textContent = `${game.player.hp}/${game.player.maxHp}`;
+            document.getElementById('attack').textContent = game.player.attack;
+            document.getElementById('defense').textContent = game.player.defense;
+            document.getElementById('gold').textContent = game.player.gold;
+            document.getElementById('exp').textContent = `${game.player.exp} (Lv.${game.player.level})`;
+            document.getElementById('floor').textContent = game.floor;
+        }
+
+        // 日志
+        function addLog(message, type = 'info') {
+            game.log.push({ message, type });
+            if (game.log.length > 50) game.log.shift();
+            
+            const logArea = document.getElementById('log-area');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = message;
+            logArea.appendChild(entry);
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        // 玩家移动
+        function movePlayer(dx, dy) {
+            const newX = game.player.x + dx;
+            const newY = game.player.y + dy;
+
+            // 边界检查
+            if (newX < 0 || newX >= COLS || newY < 0 || newY >= ROWS) return;
+            
+            // 墙壁检查
+            if (game.map[newY][newX] === 1) return;
+
+            // 敌人检查
+            const enemy = game.enemies.find(e => e.x === newX && e.y === newY);
+            if (enemy) {
+                attackEnemy(enemy);
+                render();
+                return;
+            }
+
+            // 移动
+            game.player.x = newX;
+            game.player.y = newY;
+
+            // 物品检查
+            const itemIdx = game.items.findIndex(i => i.x === newX && i.y === newY);
+            if (itemIdx !== -1) {
+                pickupItem(game.items[itemIdx]);
+                game.items.splice(itemIdx, 1);
+            }
+
+            // 楼梯检查
+            if (newX === game.stairs.x && newY === game.stairs.y) {
+                nextFloor();
+            }
+
+            render();
+            updateUI();
+        }
+
+        // 攻击敌人
+        function attackEnemy(enemy) {
+            const damage = Math.max(1, game.player.attack - enemy.defense);
+            enemy.hp -= damage;
+            addLog(`⚔️ 你对${enemy.name}造成了 ${damage} 点伤害！`, 'damage');
+
+            if (enemy.hp <= 0) {
+                game.enemies = game.enemies.filter(e => e !== enemy);
+                game.player.gold += enemy.gold;
+                game.player.exp += enemy.exp;
+                addLog(`🎉 击败了${enemy.name}！获得 ${enemy.gold} 金币和 ${enemy.exp} 经验`, 'gold');
+                
+                // 检查升级
+                checkLevelUp();
+            } else {
+                // 敌人反击
+                const enemyDamage = Math.max(1, enemy.attack - game.player.defense);
+                game.player.hp -= enemyDamage;
+                addLog(`💔 ${enemy.name}对你造成了 ${enemyDamage} 点伤害！`, 'damage');
+                canvas.classList.add('shake');
+                setTimeout(() => canvas.classList.remove('shake'), 200);
+
+                if (game.player.hp <= 0) {
+                    gameOver();
+                }
+            }
+        }
+
+        // 拾取物品
+        function pickupItem(item) {
+            switch (item.type) {
+                case 'weapon':
+                    game.player.attack += item.value;
+                    addLog(`🗡️ 装备了${item.name}，攻击+${item.value}！`, 'heal');
+                    break;
+                case 'armor':
+                    game.player.defense += item.value;
+                    addLog(`🛡️ 装备了${item.name}，防御+${item.value}！`, 'heal');
+                    break;
+                case 'potion':
+                    game.player.hp = Math.min(game.player.maxHp, game.player.hp + item.value);
+                    addLog(`🧪 使用了${item.name}，恢复 ${item.value} 生命！`, 'heal');
+                    break;
+                case 'gold':
+                    game.player.gold += item.value;
+                    addLog(`💎 获得了 ${item.value} 金币！`, 'gold');
+                    break;
+            }
+        }
+
+        // 升级检查
+        function checkLevelUp() {
+            const expNeeded = game.player.level * 50;
+            if (game.player.exp >= expNeeded) {
+                game.player.level++;
+                game.player.maxHp += 20;
+                game.player.hp = game.player.maxHp;
+                game.player.attack += 3;
+                game.player.defense += 1;
+                game.player.exp -= expNeeded;
+                addLog(`⭐ 升级了！现在你是 ${game.player.level} 级！属性大幅提升！`, 'levelup');
+            }
+        }
+
+        // 下一层
+        function nextFloor() {
+            game.floor++;
+            if (game.floor % 5 === 0) {
+                addLog(`🏰 欢迎来到第 ${game.floor} 层！小心，BOSS出现了！`, 'info');
+            } else {
+                addLog(`🪜 进入了第 ${game.floor} 层...`, 'info');
+            }
+            generateMap();
+            game.player.x = 1;
+            game.player.y = 1;
+            render();
+        }
+
+        // 游戏结束
+        function gameOver() {
+            document.getElementById('game-over').style.display = 'flex';
+            document.getElementById('final-score').textContent = 
+                `你到达了第 ${game.floor} 层，拥有 ${game.player.gold} 金币，等级 ${game.player.level}`;
+            addLog(`💀 你死了...最终到达第 ${game.floor} 层`, 'damage');
+        }
+
+        // 重新开始
+        function restart() {
+            game = {
+                player: {
+                    x: 1,
+                    y: 1,
+                    hp: 100,
+                    maxHp: 100,
+                    attack: 10,
+                    defense: 0,
+                    gold: 0,
+                    exp: 0,
+                    level: 1
+                },
+                floor: 1,
+                map: [],
+                enemies: [],
+                items: [],
+                stairs: { x: 0, y: 0 },
+                log: []
+            };
+            
+            document.getElementById('log-area').innerHTML = '';
+            document.getElementById('game-over').style.display = 'none';
+            addLog('🆕 新的冒险开始！', 'info');
+            generateMap();
+            render();
+            updateUI();
+        }
+
+        // 键盘控制
+        document.addEventListener('keydown', (e) => {
+            const keyMap = {
+                'ArrowUp': [0, -1], 'w': [0, -1], 'W': [0, -1],
+                'ArrowDown': [0, 1], 's': [0, 1], 'S': [0, 1],
+                'ArrowLeft': [-1, 0], 'a': [-1, 0], 'A': [-1, 0],
+                'ArrowRight': [1, 0], 'd': [1, 0], 'D': [1, 0]
+            };
+            
+            if (keyMap[e.key]) {
+                e.preventDefault();
+                movePlayer(keyMap[e.key][0], keyMap[e.key][1]);
+            }
+        });
+
+        document.getElementById('restart-btn').addEventListener('click', restart);
+
+        // 初始化
+        addLog('🆕 欢迎来到迷宫探险！使用方向键或WASD移动', 'info');
+        generateMap();
+        render();
+        updateUI();
+    </script>
+</body>
+</html>
